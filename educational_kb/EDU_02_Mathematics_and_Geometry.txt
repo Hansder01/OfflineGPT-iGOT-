@@ -1,0 +1,3 @@
+=== Fundamental Mathematics and Geometry Principles ===
+
+Mathematics is the science of numbers, shapes, and patterns. Geometry studies the properties of shapes such as triangles, circles, squares, and cubes. The area of a rectangle is calculated as length times width. The perimeter is the total distance around the outside of a shape.

@@ -1,0 +1,3 @@
+=== Computer Programming Concepts for Young Learners ===
+
+Programming is writing instructions for computers using code. Key programming concepts include variables, loops, conditional statements, and functions. Python is an easy-to-learn programming language used by scientists, educators, and software engineers worldwide.

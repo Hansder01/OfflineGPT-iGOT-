@@ -1,0 +1,3 @@
+=== Introduction to Physics, Motion, and Energy ===
+
+Physics is the branch of science concerned with nature and properties of matter and energy. Energy exists in kinetic, potential, thermal, electrical, and chemical forms. Newton's laws of motion describe how objects move and interact under gravitational forces.

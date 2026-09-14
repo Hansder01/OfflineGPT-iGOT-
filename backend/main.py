@@ -20,6 +20,8 @@ from backend.rag_engine import index_document_content, search_documents
 from backend.agentic_llm import generate_agent_response
 from backend.cli_parser import parse_and_execute_cli
 from backend.utils import extract_text_from_file, get_system_telemetry
+from backend.content_safety import evaluate_content_safety
+from backend.educational_kb import load_server_educational_kb
 
 # Initialize DB tables
 init_db()
@@ -27,8 +29,17 @@ init_db()
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="Offline GPT & Agentic RAG Platform with Interactive Terminal Command Prompt"
+    description="Offline GPT — Kid-Safe Educational AI Platform with Server-Locked Knowledge Base"
 )
+
+# Load server-side educational KB on startup
+@app.on_event("startup")
+def startup_event():
+    db = next(get_db())
+    try:
+        load_server_educational_kb(db)
+    finally:
+        db.close()
 
 # CORS configuration
 app.add_middleware(
@@ -123,6 +134,15 @@ def rate_limit_status(request: Request, db: Session = Depends(get_db), user: Opt
     info = get_rate_limit_info(db, identifier)
     return info
 
+@app.get("/api/system/mode")
+def system_mode_status():
+    return {
+        "educational_mode": settings.KIDS_EDUCATIONAL_MODE,
+        "server_side_kb_only": settings.SERVER_SIDE_KB_ONLY,
+        "profanity_safety_filter": settings.PROFANITY_SAFETY_FILTER,
+        "llm_mode": settings.LLM_MODE
+    }
+
 # --- CHAT & AGENT ENDPOINTS ---
 
 @app.post("/api/chat")
@@ -138,6 +158,19 @@ def chat(
     prompt = payload.get("prompt", "").strip()
     if not prompt:
         raise HTTPException(status_code=400, detail="Prompt text cannot be empty.")
+
+    # Kid Safety Content Moderation Check
+    if settings.PROFANITY_SAFETY_FILTER:
+        is_safe, refusal_msg = evaluate_content_safety(prompt)
+        if not is_safe:
+            return {
+                "prompt": prompt,
+                "response": refusal_msg,
+                "provider_used": "Kid Safety Guardrail",
+                "tools_executed": [],
+                "rag_sources": [],
+                "rate_limit": get_rate_limit_info(db, f"user_{user.id}" if user else f"ip_{request.client.host}")
+            }
     
     mode = payload.get("mode", settings.LLM_MODE)
     user_id = user.id if user else None
@@ -167,8 +200,19 @@ def execute_cli(
 ):
     cmd_text = payload.get("command", "").strip()
     identifier = f"user_{user.id}" if user else f"ip_{request.client.host}"
+
+    # Kid Safety Content Moderation Check
+    if settings.PROFANITY_SAFETY_FILTER and not cmd_text.startswith("/"):
+        is_safe, refusal_msg = evaluate_content_safety(cmd_text)
+        if not is_safe:
+            return {
+                "type": "cli_output",
+                "command": cmd_text,
+                "output": refusal_msg,
+                "rate_limit": get_rate_limit_info(db, identifier)
+            }
     
-    # Check rate limit only if command is an agent prompt (not system /help or /clear)
+    # Check rate limit only if command is an agent prompt
     if not cmd_text.startswith("/") or cmd_text.startswith("/rag"):
         rate_info = enforce_rate_limit(request, db, user)
 
@@ -194,6 +238,13 @@ async def upload_document(
     db: Session = Depends(get_db),
     user: Optional[User] = Depends(get_user_optional)
 ):
+    # Enforce Server-Side KB Lock
+    if settings.SERVER_SIDE_KB_ONLY:
+        raise HTTPException(
+            status_code=403,
+            detail="🔒 Knowledge Base is locked in Server-Side Educational Mode. Public file uploads are disabled to protect content safety."
+        )
+
     file_ext = Path(file.filename).suffix.lower()
     allowed_exts = [".pdf", ".txt", ".md", ".docx", ".csv"]
     if file_ext not in allowed_exts:
@@ -231,13 +282,7 @@ async def upload_document(
 
 @app.get("/api/documents")
 def list_documents(db: Session = Depends(get_db), user: Optional[User] = Depends(get_user_optional)):
-    query = db.query(DocumentModel)
-    if user:
-        query = query.filter((DocumentModel.user_id == user.id) | (DocumentModel.user_id == None))
-    else:
-        query = query.filter(DocumentModel.user_id == None)
-        
-    docs = query.order_by(DocumentModel.upload_date.desc()).all()
+    docs = db.query(DocumentModel).order_by(DocumentModel.upload_date.desc()).all()
     return [
         {
             "id": d.id,
@@ -246,28 +291,23 @@ def list_documents(db: Session = Depends(get_db), user: Optional[User] = Depends
             "file_size": d.file_size,
             "upload_date": d.upload_date.isoformat(),
             "chunk_count": d.chunk_count,
-            "is_public": d.user_id is None
+            "is_public": True
         }
         for d in docs
     ]
 
 @app.delete("/api/documents/{doc_id}")
 def delete_document(doc_id: int, db: Session = Depends(get_db), user: Optional[User] = Depends(get_user_optional)):
+    if settings.SERVER_SIDE_KB_ONLY:
+        raise HTTPException(
+            status_code=403,
+            detail="🔒 Knowledge Base is locked in Server-Side Educational Mode. Document deletion is restricted."
+        )
+
     doc = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found.")
         
-    if user and doc.user_id and doc.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Permission denied.")
-        
-    # Remove file on disk
-    file_path = settings.UPLOADS_DIR / doc.original_filename
-    if file_path.exists():
-        try:
-            file_path.unlink()
-        except Exception:
-            pass
-            
     db.delete(doc)
     db.commit()
     return {"message": f"Document #{doc_id} deleted successfully."}
@@ -284,7 +324,10 @@ def search_knowledge_base(payload: dict, db: Session = Depends(get_db), user: Op
 
 @app.get("/api/system/info")
 def system_info():
-    return get_system_telemetry()
+    telemetry = get_system_telemetry()
+    telemetry["educational_mode"] = settings.KIDS_EDUCATIONAL_MODE
+    telemetry["server_side_kb_only"] = settings.SERVER_SIDE_KB_ONLY
+    return telemetry
 
 # Mount Frontend Static Directory
 app.mount("/css", StaticFiles(directory=settings.FRONTEND_DIR / "css"), name="css")

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Offline GPT — Agentic RAG & Custom Command Prompt</title>
+    <title>Offline GPT — Kid-Safe Educational AI Platform</title>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,11 +25,11 @@
         <header class="navbar">
             <div class="nav-brand">
                 <div class="logo-icon">
-                    <i class="fa-solid fa-terminal"></i>
+                    <i class="fa-solid fa-graduation-cap"></i>
                 </div>
                 <div class="brand-text">
                     <span class="brand-title">OFFLINE <span class="accent-text">GPT</span></span>
-                    <span class="brand-subtitle"><i class="fa-solid fa-brain"></i> Agentic RAG Platform</span>
+                    <span class="brand-subtitle"><i class="fa-solid fa-shield-cat"></i> Educational AI & Server-Locked KB</span>
                 </div>
             </div>
 
@@ -42,7 +42,7 @@
                     <i class="fa-solid fa-code-terminal"></i> <span data-i18n="cli_tab">Command Prompt</span>
                 </button>
                 <button class="nav-tab" data-tab="rag-tab" id="tab-rag-btn">
-                    <i class="fa-solid fa-folder-open"></i> <span data-i18n="rag_tab">Knowledge Base</span>
+                    <i class="fa-solid fa-book-bookmark"></i> <span data-i18n="rag_tab">Educational KB</span>
                 </button>
                 <button class="nav-tab" data-tab="ratelimit-tab" id="tab-ratelimit-btn">
                     <i class="fa-solid fa-shield-halved"></i> <span data-i18n="security_tab">Rate Limits</span>
@@ -54,6 +54,12 @@
 
             <!-- RIGHT STATUS & USER CONTROLS -->
             <div class="nav-controls">
+                <!-- Server-Side Educational Lock Badge -->
+                <div class="quota-badge" style="border-color: var(--accent-purple); color: var(--accent-pink);" title="Knowledge Base Locked on Server Side">
+                    <i class="fa-solid fa-lock"></i>
+                    <span>Educational KB Locked 🔒</span>
+                </div>
+
                 <!-- Quota Counter Badge -->
                 <div class="quota-badge" id="nav-quota-badge" title="Prompt Rate Limit Quota">
                     <i class="fa-solid fa-bolt"></i>
@@ -75,13 +81,13 @@
 
                 <!-- User Session Profile Button -->
                 <div class="user-profile-btn" id="user-profile-btn">
-                    <i class="fa-solid fa-user-circle"></i>
-                    <span id="user-display-name" data-i18n="guest_user">Guest</span>
+                    <i class="fa-solid fa-user-graduate"></i>
+                    <span id="user-display-name" data-i18n="guest_user">Student</span>
                 </div>
             </div>
         </header>
 
-        <!-- RATE LIMIT WARNING BANNER (Shows on Cooldown) -->
+        <!-- RATE LIMIT WARNING BANNER -->
         <div id="rate-limit-banner" class="rate-limit-banner hidden">
             <div class="banner-content">
                 <i class="fa-solid fa-triangle-exclamation warning-icon"></i>
@@ -106,7 +112,7 @@
                     <div class="chat-header">
                         <div class="provider-badge">
                             <span class="pulse-dot"></span>
-                            <span id="active-provider-label">Engine: Auto (Gemini / Groq / Offline)</span>
+                            <span id="active-provider-label">Engine: Kid-Safe Educational AI</span>
                         </div>
                         <div class="chat-controls">
                             <select id="chat-mode-select" class="select-input">
@@ -126,12 +132,13 @@
                         <div class="message system-msg">
                             <div class="msg-avatar"><i class="fa-solid fa-robot"></i></div>
                             <div class="msg-body">
-                                <h3>👋 <span data-i18n="welcome_title">Welcome to Offline GPT!</span></h3>
-                                <p data-i18n="welcome_desc">Your privacy-first Agentic RAG platform. Ask questions, query uploaded documents, or execute commands in the Command Prompt tab.</p>
+                                <h3>🎓 <span data-i18n="welcome_title">Welcome to Offline GPT Educational Edition!</span></h3>
+                                <p data-i18n="welcome_desc">Your child-safe, server-locked AI learning assistant. Ask questions about science, math, astronomy, history, or coding!</p>
                                 <div class="quick-chips">
-                                    <button class="chip-btn" data-prompt="What can this Offline GPT platform do?">🤖 Platform Overview</button>
-                                    <button class="chip-btn" data-prompt="What is the current system telemetry status?">💻 System Telemetry</button>
-                                    <button class="chip-btn" data-prompt="Calculate math: 42 * (15 + 85)">🧮 Math Execution</button>
+                                    <button class="chip-btn" data-prompt="Tell me about the planets in our solar system">🌌 Solar System</button>
+                                    <button class="chip-btn" data-prompt="How do plants convert sunlight into energy with photosynthesis?">🌱 Photosynthesis</button>
+                                    <button class="chip-btn" data-prompt="Calculate math: 125 * 8">📐 Math Practice</button>
+                                    <button class="chip-btn" data-prompt="What are basic programming concepts for kids in Python?">💻 Python Coding</button>
                                 </div>
                             </div>
                         </div>
@@ -140,7 +147,7 @@
                     <!-- Input Bar -->
                     <div class="chat-input-area">
                         <div class="input-wrapper">
-                            <textarea id="chat-input" rows="1" placeholder="Type your message or prompt here..." data-i18n-ph="type_prompt_ph"></textarea>
+                            <textarea id="chat-input" rows="1" placeholder="Ask an educational question..." data-i18n-ph="type_prompt_ph"></textarea>
                             <button id="send-chat-btn" class="btn btn-primary btn-icon">
                                 <i class="fa-solid fa-paper-plane"></i>
                             </button>
@@ -161,7 +168,7 @@
                             <span class="dot green"></span>
                         </div>
                         <div class="terminal-title">
-                            <i class="fa-solid fa-terminal"></i> <span data-i18n="terminal_title">Offline GPT Interactive Command Prompt CLI v1.0</span>
+                            <i class="fa-solid fa-terminal"></i> <span data-i18n="terminal_title">Offline GPT Interactive Command Prompt CLI v1.1</span>
                         </div>
                         <div class="terminal-quick-actions">
                             <button class="cli-cmd-btn" data-cmd="/help">/help</button>
@@ -175,7 +182,7 @@
                     <!-- Terminal Output Window -->
                     <div id="terminal-window" class="terminal-screen">
                         <div class="term-line banner-line">======================================================================</div>
-                        <div class="term-line banner-line">  OFFLINE GPT INTERACTIVE TERMINAL CLI</div>
+                        <div class="term-line banner-line">  OFFLINE GPT INTERACTIVE TERMINAL CLI (EDUCATIONAL EDITION)</div>
                         <div class="term-line banner-line">  Type <span class="term-highlight">/help</span> to view available custom commands.</div>
                         <div class="term-line banner-line">======================================================================</div>
                         <br>
@@ -183,7 +190,7 @@
 
                     <!-- Terminal Prompt Input -->
                     <div class="terminal-input-row">
-                        <span class="term-prompt-symbol">offline-gpt@agent:~$&nbsp;</span>
+                        <span class="term-prompt-symbol">offline-gpt@student:~$&nbsp;</span>
                         <input type="text" id="cli-input" class="term-input" placeholder="Type slash command or prompt (e.g. /help)..." autocomplete="off">
                         <button id="cli-exec-btn" class="btn btn-emerald btn-sm">
                             <i class="fa-solid fa-play"></i> <span data-i18n="exec_btn">Exec</span>
@@ -196,41 +203,38 @@
             <section id="rag-tab" class="tab-panel">
                 <div class="rag-layout">
                     
-                    <!-- File Upload Panel -->
+                    <!-- Server Lock Notice Card -->
                     <div class="upload-panel glass-card">
-                        <h3 class="panel-title"><i class="fa-solid fa-cloud-arrow-up"></i> <span data-i18n="upload_docs_title">Upload Knowledge Base Files</span></h3>
-                        <p class="panel-desc" data-i18n="upload_docs_desc">Index PDF, TXT, MD, DOCX, or CSV files into vector chunk embeddings for offline RAG search.</p>
+                        <h3 class="panel-title"><i class="fa-solid fa-shield-heart text-accent"></i> <span data-i18n="upload_docs_title">Server-Side Knowledge Base Lock</span></h3>
+                        <p class="panel-desc" style="margin-bottom: 1rem;">To protect students from adulterated or unvetted content, the Knowledge Base is <strong>locked on the server side</strong> to verified educational curricula.</p>
                         
-                        <div id="drop-zone" class="drop-zone">
-                            <i class="fa-solid fa-file-pdf drop-icon"></i>
-                            <div class="drop-text">
-                                <strong data-i18n="drag_drop_text">Drag & Drop files here</strong>
-                                <span data-i18n="or_browse">or click to browse from computer</span>
-                            </div>
-                            <input type="file" id="file-input" accept=".pdf,.txt,.md,.docx,.csv" class="file-input-hidden">
+                        <div class="info-box" style="background: rgba(168, 85, 247, 0.1); border: 1px solid var(--accent-purple); padding: 1rem; border-radius: 10px;">
+                            <h4 style="color: var(--accent-pink); margin-bottom: 0.4rem;"><i class="fa-solid fa-lock"></i> Server Lock Active</h4>
+                            <p style="font-size: 0.825rem; color: var(--text-primary); line-height: 1.5;">
+                                Document upload & deletion are restricted to server administrators. All indexed files are managed in <code>educational_kb/</code> on the server.
+                            </p>
                         </div>
 
-                        <div id="upload-progress-card" class="upload-progress-card hidden">
-                            <div class="progress-info">
-                                <span id="upload-filename">document.pdf</span>
-                                <span id="upload-percent">0%</span>
+                        <div id="drop-zone" class="drop-zone" style="opacity: 0.6; cursor: not-allowed; margin-top: 1rem;">
+                            <i class="fa-solid fa-lock drop-icon"></i>
+                            <div class="drop-text">
+                                <strong>Server-Side Lock Enabled</strong>
+                                <span>Client uploads disabled for child safety</span>
                             </div>
-                            <div class="progress-bar-bg">
-                                <div id="upload-bar-fill" class="progress-bar-fill"></div>
-                            </div>
+                            <input type="file" id="file-input" disabled class="file-input-hidden">
                         </div>
                     </div>
 
                     <!-- Documents Table & Vector Search Test -->
                     <div class="documents-panel glass-card">
-                        <div class="panel-header-row">
-                            <h3 class="panel-title"><i class="fa-solid fa-database"></i> <span data-i18n="indexed_docs_title">Indexed Knowledge Base Documents</span></h3>
-                            <button id="refresh-docs-btn" class="btn btn-secondary btn-sm"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+                        <div class="panel-header-row" style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 class="panel-title"><i class="fa-solid fa-book-open-reader"></i> <span data-i18n="indexed_docs_title">Curated Educational Curriculum</span></h3>
+                            <button id="refresh-docs-btn" class="btn btn-secondary btn-sm"><i class="fa-solid fa-rotate-right"></i> Refresh List</button>
                         </div>
 
                         <div class="search-test-box">
-                            <input type="text" id="rag-search-input" class="text-input" placeholder="Test vector search across indexed documents...">
-                            <button id="rag-search-btn" class="btn btn-primary btn-sm"><i class="fa-solid fa-magnifying-glass"></i> RAG Search</button>
+                            <input type="text" id="rag-search-input" class="text-input" placeholder="Search across server-side educational subjects...">
+                            <button id="rag-search-btn" class="btn btn-primary btn-sm"><i class="fa-solid fa-magnifying-glass"></i> Search Curriculum</button>
                         </div>
 
                         <div id="rag-search-results-area" class="rag-search-results hidden">
@@ -242,17 +246,16 @@
                                 <thead>
                                     <tr>
                                         <th>ID</th>
-                                        <th>Filename</th>
+                                        <th>Subject Document</th>
                                         <th>Type</th>
                                         <th>Size</th>
                                         <th>Chunks</th>
-                                        <th>Date</th>
-                                        <th>Action</th>
+                                        <th>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody id="docs-table-body">
                                     <tr>
-                                        <td colspan="7" class="text-center">No documents uploaded yet. Drop a PDF/TXT file above!</td>
+                                        <td colspan="6" class="text-center">Loading server-side educational documents...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -300,21 +303,21 @@
 
                     <!-- Security Log & Rules Card -->
                     <div class="security-info-card glass-card">
-                        <h3 class="panel-title"><i class="fa-solid fa-lock"></i> <span data-i18n="security_policy_title">Security Policy & Rate Limit Rules</span></h3>
+                        <h3 class="panel-title"><i class="fa-solid fa-lock"></i> <span data-i18n="security_policy_title">Kid Safety & Security Policies</span></h3>
                         
-                        <div class="info-box">
-                            <h4><i class="fa-solid fa-circle-check text-success"></i> Sliding Window Protection</h4>
-                            <p>To prevent system abuse and manage API token budgets, Offline GPT enforces a sliding window rate limit per session/IP address.</p>
+                        <div class="info-box" style="margin-bottom: 0.85rem;">
+                            <h4><i class="fa-solid fa-shield-check text-success"></i> Content Moderation Guardrail</h4>
+                            <p>Automated backend filter screens all input prompts for profanity or non-educational topics before returning answers.</p>
+                        </div>
+
+                        <div class="info-box" style="margin-bottom: 0.85rem;">
+                            <h4><i class="fa-solid fa-arrows-rotate text-accent"></i> Sliding Window Rate Limiting</h4>
+                            <p>Once the prompt quota is reached, execution pauses. The cooldown timer resets automatically once expired.</p>
                         </div>
 
                         <div class="info-box">
-                            <h4><i class="fa-solid fa-arrows-rotate text-accent"></i> Automatic Cooldown Reset</h4>
-                            <p>Once you reach the 10 prompt limit, prompt execution will pause. The cooldown timer counts down in real time and automatically unlocks your quota once expired.</p>
-                        </div>
-
-                        <div class="info-box">
-                            <h4><i class="fa-solid fa-user-shield text-emerald"></i> Database Session Tracking</h4>
-                            <p>Active user sessions and usage logs are stored securely in the local SQLite database (`app.db`). Logged in users get dedicated session tracking.</p>
+                            <h4><i class="fa-solid fa-user-shield text-emerald"></i> Server-Side KB Protection</h4>
+                            <p>The RAG knowledge base is locked to server-verified educational modules, ensuring zero adulterated content.</p>
                         </div>
                     </div>
                 </div>
@@ -326,26 +329,26 @@
                     
                     <!-- System Architecture Card -->
                     <div class="about-card glass-card">
-                        <h3 class="panel-title"><i class="fa-solid fa-circle-info"></i> <span data-i18n="about_project_title">About Offline GPT</span></h3>
-                        <p>Offline GPT is a full-stack Agentic AI platform built with Python, FastAPI, SQLite, and modern web UI technologies. Designed to operate 100% offline with zero external telemetry, or seamlessly connect to free tier cloud models.</p>
+                        <h3 class="panel-title"><i class="fa-solid fa-circle-info"></i> <span data-i18n="about_project_title">About Offline GPT Educational Edition</span></h3>
+                        <p>Offline GPT is a child-safe Agentic AI platform built with Python, FastAPI, SQLite, and a server-locked educational knowledge base.</p>
                         
                         <div class="arch-features">
                             <div class="arch-box">
-                                <i class="fa-solid fa-plug-circle-check arch-icon"></i>
-                                <h4>Free API Keys Supported</h4>
-                                <p>Configured for free tier Google Gemini API (`GEMINI_API_KEY`) and Groq (`GROQ_API_KEY`) in `.env` file.</p>
+                                <i class="fa-solid fa-shield-cat arch-icon"></i>
+                                <h4>Kid Safety Moderation</h4>
+                                <p>Backend guardrails filter inappropriate content and guide students back to core subjects.</p>
                             </div>
 
                             <div class="arch-box">
-                                <i class="fa-solid fa-laptop-code arch-icon"></i>
+                                <i class="fa-solid fa-lock arch-icon"></i>
+                                <h4>Server-Locked KB</h4>
+                                <p>Knowledge base is locked on the server side to verified educational documents.</p>
+                            </div>
+
+                            <div class="arch-box">
+                                <i class="fa-solid fa-code arch-icon"></i>
                                 <h4>Interactive Hacker CLI</h4>
-                                <p>Built-in terminal prompt supporting custom commands (`/rag search`, `/agent math`, `/sysinfo`, `/limit`, `/config`).</p>
-                            </div>
-
-                            <div class="arch-box">
-                                <i class="fa-solid fa-layer-group arch-icon"></i>
-                                <h4>RAG Vector Engine</h4>
-                                <p>Ingests PDF, TXT, MD, DOCX, CSV files into local chunk embeddings with similarity scoring.</p>
+                                <p>Built-in terminal prompt supporting custom commands (`/rag search`, `/agent math`, `/sysinfo`).</p>
                             </div>
 
                             <div class="arch-box">
@@ -371,28 +374,19 @@
                     <div class="env-guide-card glass-card">
                         <h3 class="panel-title"><i class="fa-solid fa-key"></i> <span data-i18n="env_guide_title">Free API Keys & .env Setup</span></h3>
                         
-                        <p>You can use Offline GPT in **100% Offline Mode**, or paste free API keys in your local `.env` file for enhanced neural capabilities:</p>
+                        <p>You can use Offline GPT in **100% Offline Mode**, or paste free API keys in your local `.env` file:</p>
 
                         <div class="env-snippet">
-                            <pre><code># Offline GPT .env Configuration
+                            <pre><code># Offline GPT Educational Configuration
 
-# Free Google Gemini API Key (Get at: https://aistudio.google.com/)
+# Kid Safety & Server-Side KB Lock
+KIDS_EDUCATIONAL_MODE=true
+SERVER_SIDE_KB_ONLY=true
+PROFANITY_SAFETY_FILTER=true
+
+# Free API Keys
 GEMINI_API_KEY=AIzaSy...
-
-# Free Groq API Key (Get at: https://console.groq.com/)
-GROQ_API_KEY=gsk_...
-
-# Rate Limiting Parameters
-RATE_LIMIT_PROMPTS=10
-RATE_LIMIT_WINDOW_SECONDS=300</code></pre>
-                        </div>
-
-                        <div class="instructions-list">
-                            <ol>
-                                <li>Open the <code>.env</code> file in your project root folder.</li>
-                                <li>Paste your free Gemini or Groq API key.</li>
-                                <li>Save the file — system auto-detects API key changes!</li>
-                            </ol>
+GROQ_API_KEY=gsk_...</code></pre>
                         </div>
                     </div>
                 </div>
@@ -401,13 +395,13 @@ RATE_LIMIT_WINDOW_SECONDS=300</code></pre>
         </main>
     </div>
 
-    <!-- AUTH MODAL (LOGIN / REGISTER) -->
+    <!-- AUTH MODAL -->
     <div id="auth-modal" class="modal-overlay hidden">
         <div class="modal-card glass-card">
             <button id="close-auth-modal" class="modal-close-btn">&times;</button>
             
             <div class="modal-tabs">
-                <button id="auth-tab-login" class="auth-tab-btn active">Login</button>
+                <button id="auth-tab-login" class="auth-tab-btn active">Student Login</button>
                 <button id="auth-tab-register" class="auth-tab-btn">Register</button>
             </div>
 
@@ -433,7 +427,7 @@ RATE_LIMIT_WINDOW_SECONDS=300</code></pre>
                 </div>
                 <div class="form-group">
                     <label for="reg-email">Email Address</label>
-                    <input type="email" id="reg-email" class="text-input" placeholder="name@example.com" required>
+                    <input type="email" id="reg-email" class="text-input" placeholder="student@example.com" required>
                 </div>
                 <div class="form-group">
                     <label for="reg-password">Password</label>
