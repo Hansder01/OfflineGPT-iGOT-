@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from backend.config import settings
 from backend.rag_engine import search_documents
 from backend.utils import get_system_telemetry
-from backend.content_safety import sanitize_output
+from backend.content_safety import evaluate_content_safety, sanitize_output
 
 # Tool Definitions for Agentic AI
 TOOLS = [
@@ -159,11 +159,9 @@ def call_groq_api(prompt: str, system_context: str = "") -> Optional[str]:
 def call_ollama_local(prompt: str, system_context: str = "") -> Optional[str]:
     """
     Calls local Ollama instance running Llama 3.2 with strict educational safety lock.
-    Uses /api/chat with locked system prompt, falling back to /api/generate.
     """
     combined_system = f"{LOCKED_EDUCATIONAL_SYSTEM_PROMPT}\n\n{system_context}".strip()
     
-    # Method 1: Try Ollama Chat API (best for Llama 3.2 system instruction following)
     chat_url = f"{settings.OLLAMA_BASE_URL}/api/chat"
     chat_payload = {
         "model": settings.OLLAMA_MODEL,
@@ -188,7 +186,6 @@ def call_ollama_local(prompt: str, system_context: str = "") -> Optional[str]:
     except Exception:
         pass
 
-    # Method 2: Fallback to /api/generate
     gen_url = f"{settings.OLLAMA_BASE_URL}/api/generate"
     gen_payload = {
         "model": settings.OLLAMA_MODEL,
@@ -209,16 +206,15 @@ def call_ollama_local(prompt: str, system_context: str = "") -> Optional[str]:
 def synthesize_offline_educational_lesson(prompt: str, rag_sources: List[Dict[str, Any]], tool_outputs: List[Dict[str, Any]]) -> str:
     """
     Advanced Local Educational Synthesis Engine:
-    Synthesizes rich, structured offline answers with lesson summaries, key concepts, and fun facts.
+    Requires strong relevance score (>= 0.35). Never hallucinates unrelated documents.
     """
     p_lower = prompt.lower()
     
-    # 1. RAG-Based Educational Synthesis
-    if rag_sources and any(s["score"] > 0.05 for s in rag_sources):
-        valid_sources = [s for s in rag_sources if s["score"] > 0.05]
-        
-        response = f"🎓 **[Offline Educational Knowledge Lesson]**\n\n"
-        response += f"### 📖 Topic: *\"{prompt.title()}\"*\n\n"
+    # 1. RAG-Based Educational Synthesis (Requires actual relevant matches)
+    valid_sources = [s for s in rag_sources if s.get("score", 0) >= 0.35]
+    
+    if valid_sources:
+        response = f"🎓 **[Educational Knowledge Lesson]**\n\n"
         
         lesson_points = []
         for s in valid_sources:
@@ -234,11 +230,10 @@ def synthesize_offline_educational_lesson(prompt: str, rag_sources: List[Dict[st
             if len(sent.strip()) > 10:
                 response += f"- **Takeaway {i}:** {sent.strip()}\n"
                 
-        response += f"\n### 📚 Referenced Educational Documents:\n"
+        response += f"\n### 📚 Verified Curriculum Sources:\n"
         for s in valid_sources:
-            response += f"- 📄 `{s['filename']}` (Match Score: {int(s['score']*100)}%)\n"
+            response += f"- 📄 `{s['filename']}` (Relevance: {int(s['score']*100)}%)\n"
             
-        response += f"\n---\n*💡 Note: With local Llama 3.2 installed (`ollama pull llama3.2`), all questions are answered by Llama's knowledge base with full safety locks!*"
         return sanitize_output(response)
 
     # 2. Tool Output Synthesis
@@ -255,42 +250,54 @@ def synthesize_offline_educational_lesson(prompt: str, rag_sources: List[Dict[st
                 response += f"### 💻 Local Server Telemetry:\n"
                 response += f"- **OS:** `{tele.get('os')}`\n"
                 response += f"- **CPU Usage:** `{tele.get('cpu_usage_percent')}%`\n"
-                response += f"- **RAM:** `{tele.get('memory_used_gb')} GB / {tele.get('memory_total_gb')} GB ({tele.get('memory_percent')}%)`\n"
+                response += f"- **RAM:** `{tele.get('memory_used_gb')} GB / {tele.get('memory_total_gb')} GB\n"
             elif t == "datetime_lookup":
                 response += f"### 🕒 Date & Time:\n"
                 response += f"Date: `{output.get('date')}` | Time: `{output.get('time')}`\n"
         return sanitize_output(response)
 
     # 3. Conversational Offline Synthesis
-    if "hello" in p_lower or "hi" in p_lower or "hey" in p_lower:
+    if re.search(r'\b(hello|hi|hey|greetings|morning|afternoon)\b', p_lower):
         return "👋 **Hello Student! Welcome to Offline GPT Educational Edition.**\n\nI am your offline AI learning assistant. Ask me questions about:\n- 🌌 **Solar System & Astronomy**\n- 📐 **Mathematics & Geometry**\n- 🧪 **Physics, Chemistry & Biology**\n- 🌍 **Geography & History**\n- 💻 **Computer Coding in Python**"
-    elif "who are you" in p_lower or "about" in p_lower or "what can you do" in p_lower:
+    elif re.search(r'\b(who are you|about you|what can you do)\b', p_lower):
         return "🎓 **Offline GPT — Locked Educational AI**\n\nI am a child-safe educational assistant running on your local server. Hazardous and adult content is strictly locked and unaccessible."
     else:
-        return f"📖 **Offline Educational Assistant:**\n\nI received your question: *\"{prompt}\"*.\n\nYou can query our verified educational knowledge base, or launch local Llama 3.2 via Ollama (`ollama run llama3.2`) to answer any school topic offline with full safety locks!"
+        # Explicit Non-Hallucinating Fallback: No false document matches
+        return "📖 **Offline Educational Assistant:**\n\nI could not find information about that in the educational curriculum.\n\nPlease ask a school subject question about:\n- 🌌 **The Solar System & Planets**\n- 📐 **Mathematics & Geometry**\n- 🧪 **Physics, Plants & Ecosystems**\n- 🌍 **World Geography & History**\n- 💻 **Computer Programming Basics**"
 
 def generate_agent_response(prompt: str, db: Session, user_id: Optional[int] = None, mode: str = "auto") -> Dict[str, Any]:
     """
-    Main Agentic Orchestrator for Offline & Online Modes with Output Sanitization
+    Main Agentic Orchestrator for Offline & Online Modes with Multi-Layer Safety Guardrails
     """
+    # LAYER 1: Immediate Content Safety Evaluation
+    is_safe, refusal_msg = evaluate_content_safety(prompt)
+    if not is_safe:
+        return {
+            "prompt": prompt,
+            "response": refusal_msg,
+            "provider_used": "Kid Safety Guardrail",
+            "tools_executed": [],
+            "rag_sources": []
+        }
+
     tool_outputs = []
     rag_sources = []
     p_lower = prompt.lower()
     
-    # 1. Math calculation request
-    if re.search(r'(\d+[\+\-\*\/\%\^]\d+)|calculate|compute|math', p_lower):
+    # 1. Math calculation request (Strict word boundaries or explicit math operators)
+    if re.search(r'\b(calculate|compute|solve math)\b', p_lower) or re.search(r'^\s*[\d\.\(\)]+\s*[\+\-\*\/\^]\s*[\d\.\(\)]+', prompt):
         math_match = re.search(r'([0-9\.\s\+\-\*\/\%\^\(\)]+)', prompt)
         if math_match and len(math_match.group(1).strip()) > 2:
             out = execute_agent_tool("math_calculator", {"expression": math_match.group(1).strip()})
             tool_outputs.append(out)
             
-    # 2. System info request
-    if "system" in p_lower or "cpu" in p_lower or "ram" in p_lower or "memory" in p_lower or "status" in p_lower or "telemetry" in p_lower:
+    # 2. System info request (Strict word boundaries - prevents 'tiramisu' matching 'ram'!)
+    if re.search(r'\b(system status|telemetry|cpu usage|hardware info|ram usage|memory status)\b', p_lower):
         out = execute_agent_tool("system_diagnostics", {})
         tool_outputs.append(out)
         
-    # 3. Date / Time request
-    if "time" in p_lower or "date" in p_lower or "today" in p_lower or "clock" in p_lower:
+    # 3. Date / Time request (Strict word boundaries)
+    if re.search(r'\b(current time|what time is it|today\'s date|what date is it|what is the time)\b', p_lower):
         out = execute_agent_tool("datetime_lookup", {})
         tool_outputs.append(out)
         
@@ -302,9 +309,10 @@ def generate_agent_response(prompt: str, db: Session, user_id: Optional[int] = N
 
     # Build System Context for LLM Synthesis
     system_context = ""
-    if rag_sources:
+    valid_rag_chunks = [s for s in rag_sources if s.get("score", 0) >= 0.35]
+    if valid_rag_chunks:
         system_context += "Relevant Educational Curriculum Context:\n"
-        for i, s in enumerate(rag_sources, 1):
+        for i, s in enumerate(valid_rag_chunks, 1):
             system_context += f"[Document {i}: {s['filename']}]\n{s['content']}\n\n"
 
     answer = None
@@ -329,10 +337,10 @@ def generate_agent_response(prompt: str, db: Session, user_id: Optional[int] = N
 
     # 3. Enhanced Offline Synthesis Engine
     if not answer:
-        answer = synthesize_offline_educational_lesson(prompt, rag_sources, tool_outputs)
+        answer = synthesize_offline_educational_lesson(prompt, valid_rag_chunks, tool_outputs)
         provider_used = "Local Educational Synthesizer"
 
-    # Guaranteed post-generation safety screening
+    # LAYER 3: Guaranteed post-generation safety screening
     safe_answer = sanitize_output(answer)
 
     return {
@@ -340,5 +348,5 @@ def generate_agent_response(prompt: str, db: Session, user_id: Optional[int] = N
         "response": safe_answer,
         "provider_used": provider_used,
         "tools_executed": [t.get("tool") for t in tool_outputs if "tool" in t],
-        "rag_sources": rag_sources
+        "rag_sources": valid_rag_chunks
     }

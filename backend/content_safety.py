@@ -1,45 +1,57 @@
 import re
 from typing import Tuple, Optional
 
-# Expanded Kid-Safety & Hazard Blocklist Patterns
-INAPPROPRIATE_PATTERNS = [
-    # Adult / Explicit
-    r'\b(adult|nsfw|porn|explicit|erotic|sex|nude|dating|escort)\b',
-    # Violence / Weapons / Explosives / Hazardous Chemicals
-    r'\b(bomb|explosive|weapon|gun|firearm|grenade|ammunition|assault|kill|murder|poison|cyanide|meth|cocaine|heroin|fentanyl)\b',
-    # Self-harm / Suicide
-    r'\b(suicide|self-harm|cut myself|hang myself)\b',
-    # Cyber Attacks / Malware
-    r'\b(hack|crack|bypass|malware|virus|trojan|ransomware|keylogger|ddos|phishing)\b',
-    # Gambling / Profanity
-    r'\b(gambling|casino|betting|profanity|curse|hate speech|slur)\b'
+# Bulletproof Kid-Safety & Hazard Regex Patterns with root/stem wildcard matching
+HAZARD_PATTERNS = [
+    # Explosives, Weapons, Bombs, Firearms, Ammunition
+    r'\b(bomb\w*|explos\w*|weapon\w*|gun\w*|firearm\w*|grenad\w*|ammunit\w*|missil\w*|dynamit\w*|gunpowder|landmine\w*|c4)\b',
+    # Violence, Killing, Physical Harm, Assault, Murder
+    r'\b(kill\w*|murder\w*|assault\w*|slaughter\w*|massacr\w*|tortur\w*|stab\w*|shoot\w*|behead\w*|strangl\w*|decapitat\w*)\b',
+    # Hazardous Chemicals, Poisons, Toxins
+    r'\b(poison\w*|cyanid\w*|arsenic|ricin|anthrax|sarin|toxic chemical\w*|nerve agent\w*)\b',
+    # Narcotics, Illegal Drugs, Synthesis
+    r'\b(drug\w*|cocaine|heroin|meth\w*|fentanyl|narcotic\w*|lsd|ecstasy|weed|marijuana|overdose)\b',
+    # Self-Harm & Suicide
+    r'\b(suicid\w*|self-harm\w*|cut myself|hang myself|end my life|kill myself)\b',
+    # Adult, Sexual, Erotic, Nudity, Pornography
+    r'\b(adult\w*|nsfw|porn\w*|explicit|erotic\w*|sex\w*|nude|nudity|dating|escort\w*|prostitut\w*|genital\w*|vagina\w*|penis\w*)\b',
+    # Cyber Attacks, Hacking, Malware
+    r'\b(hack\w*|crack\w*|bypass\w*|malware|ransomware|trojan\w*|keylogger\w*|phish\w*|ddos|exploit\w*)\b',
+    # Hate Speech, Profanity, Slurs
+    r'\b(profan\w*|curse\w*|hate speech|slur\w*|fuck\w*|shit\w*|bitch\w*|asshole\w*|bastard\w*)\b'
 ]
 
 SAFE_KID_RESPONSE = """
 🛡️ **[Kid Safety Guardrail Active]**
 
-Hello! Offline GPT is locked in **Server-Side Educational Mode** for students. 
+Offline GPT is locked in **Educational Mode for Children**. 
 
-I can help you explore and learn:
-- 🌌 **Astronomy & Space Exploration**
+I cannot provide instructions or information related to weapons, explosives, violence, adult topics, or hazardous materials.
+
+You can ask me about safe school subjects:
+- 🌌 **Astronomy & The Solar System**
 - 📐 **Mathematics & Geometry**
-- 🧪 **Science, Chemistry & Biology**
+- 🧪 **General Science & Physics**
 - 🌍 **Geography & World History**
-- 💻 **Computer Coding & Logic**
-- 📖 **Literature, Grammar & Creative Writing**
+- 💻 **Computer Programming in Python**
+- 📖 **Literature & Creative Writing**
 
-Please ask me a question about one of your school or educational subjects!
+What educational topic would you like to explore?
 """
 
 def evaluate_content_safety(prompt: str) -> Tuple[bool, Optional[str]]:
     """
-    Evaluates input prompt against kid-safety guardrails.
+    Evaluates prompt against kid-safety guardrails.
     Returns (is_safe, refusal_response)
     """
-    p_lower = prompt.lower()
+    if not prompt:
+        return True, None
+        
+    p_clean = prompt.lower().strip()
     
-    for pattern in INAPPROPRIATE_PATTERNS:
-        if re.search(pattern, p_lower):
+    # Check all hazard patterns with word stems
+    for pattern in HAZARD_PATTERNS:
+        if re.search(pattern, p_clean):
             return False, SAFE_KID_RESPONSE.strip()
             
     return True, None
@@ -47,14 +59,14 @@ def evaluate_content_safety(prompt: str) -> Tuple[bool, Optional[str]]:
 def sanitize_output(text: str) -> str:
     """
     Post-inference check on any generated response from Llama 3.2 or cloud models.
-    Guarantees no hazardous content reaches the student.
+    Guarantees no hazardous or adult content reaches the student.
     """
     if not text:
         return ""
         
-    t_lower = text.lower()
-    for pattern in INAPPROPRIATE_PATTERNS:
-        if re.search(pattern, t_lower):
+    t_clean = text.lower()
+    for pattern in HAZARD_PATTERNS:
+        if re.search(pattern, t_clean):
             return SAFE_KID_RESPONSE.strip()
             
     return text

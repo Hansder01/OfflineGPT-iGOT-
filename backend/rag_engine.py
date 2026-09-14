@@ -6,17 +6,32 @@ from sqlalchemy.orm import Session
 from backend.config import settings
 from backend.models import DocumentModel, DocumentChunk
 
+# Common English Stopwords to prevent spurious RAG keyword matching
+STOPWORDS = {
+    "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", 
+    "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but", 
+    "by", "can", "cannot", "could", "did", "do", "does", "doing", "down", "during", "each", 
+    "few", "for", "from", "further", "had", "has", "have", "having", "he", "her", "here", "hers", 
+    "herself", "him", "himself", "his", "how", "i", "if", "in", "into", "is", "it", "its", "itself", 
+    "let", "me", "more", "most", "my", "myself", "no", "nor", "not", "of", "off", "on", "once", 
+    "only", "or", "other", "ought", "our", "ours", "ourselves", "out", "over", "own", "same", 
+    "she", "should", "so", "some", "such", "than", "that", "the", "their", "theirs", "them", 
+    "themselves", "then", "there", "these", "they", "this", "those", "through", "to", "too", "under", 
+    "until", "up", "very", "was", "we", "were", "what", "when", "where", "which", "while", "who", 
+    "whom", "why", "with", "would", "you", "your", "yours", "yourself", "yourselves", "make", "step", 
+    "process", "tell", "explain", "give", "show"
+}
+
 # Try importing sentence_transformers, with fallback to TF-IDF cosine similarity
 SENTENCE_TRANSFORMER_AVAILABLE = False
 embed_model = None
 
 try:
     from sentence_transformers import SentenceTransformer
-    # Load lightweight local model
     embed_model = SentenceTransformer('all-MiniLM-L6-v2')
     SENTENCE_TRANSFORMER_AVAILABLE = True
-except Exception as e:
-    print(f"[RAG Engine] SentenceTransformers not active, using lightweight internal vector engine: {e}")
+except Exception:
+    pass
 
 def get_embedding(text: str) -> List[float]:
     """Generates vector embedding for input text."""
@@ -26,15 +41,14 @@ def get_embedding(text: str) -> List[float]:
         except Exception:
             pass
     
-    # Lightweight TF-IDF style term frequency vector fallback
-    words = re.findall(r'\w+', text.lower())
+    # Filter stopwords for TF-IDF style term frequency vector fallback
+    raw_words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
+    words = [w for w in raw_words if w not in STOPWORDS]
     freqs: Dict[str, float] = {}
     for w in words:
-        freqs[w] = freqs.get(w, 0) + 1.0
+        freqs[w] = freqs.get(w, 0.0) + 1.0
     
-    # Normalize length
     norm = math.sqrt(sum(v*v for v in freqs.values())) or 1.0
-    # Store top terms as simple key-val representation
     return [freqs.get(w, 0.0) / norm for w in list(set(words))[:64]]
 
 def cosine_similarity_vectors(vec1: List[float], vec2: List[float]) -> float:
@@ -68,14 +82,12 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]
         else:
             if current_chunk:
                 chunks.append(current_chunk)
-            # Create next chunk with overlap
             overlap_text = current_chunk[-overlap:] if len(current_chunk) > overlap else current_chunk
             current_chunk = (overlap_text + "\n\n" + p) if overlap_text else p
             
     if current_chunk:
         chunks.append(current_chunk)
         
-    # If chunks are still empty or huge, hard split
     if not chunks and text:
         for i in range(0, len(text), chunk_size - overlap):
             chunks.append(text[i:i + chunk_size])
@@ -103,7 +115,18 @@ def index_document_content(db: Session, doc_model: DocumentModel, text_content: 
     return len(chunks)
 
 def search_documents(db: Session, query: str, top_k: int = 4, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Performs semantic vector search across indexed document chunks."""
+    """
+    Performs semantic vector search across indexed document chunks.
+    Uses meaningful content words (stopwords removed) and enforces strict relevance threshold.
+    """
+    # Extract substantive query keywords (ignore common filler words)
+    raw_query_words = re.findall(r'\b[a-zA-Z]{3,}\b', query.lower())
+    substantive_query_words = set(w for w in raw_query_words if w not in STOPWORDS)
+    
+    # If query has no substantive keywords, do not match random documents
+    if not substantive_query_words:
+        return []
+        
     query_vec = get_embedding(query)
     
     query_builder = db.query(DocumentChunk, DocumentModel).join(
@@ -116,11 +139,7 @@ def search_documents(db: Session, query: str, top_k: int = 4, user_id: Optional[
         )
         
     results_raw = query_builder.all()
-    
     scored_chunks = []
-    
-    # Keyword bonus check
-    query_words = set(re.findall(r'\w+', query.lower()))
     
     for chunk, doc in results_raw:
         score = 0.0
@@ -131,20 +150,27 @@ def search_documents(db: Session, query: str, top_k: int = 4, user_id: Optional[
             except Exception:
                 score = 0.0
                 
-        # Keyword matching bonus
-        chunk_words = set(re.findall(r'\w+', chunk.content.lower()))
-        common = query_words.intersection(chunk_words)
-        if query_words:
-            keyword_bonus = (len(common) / len(query_words)) * 0.4
-            score += keyword_bonus
+        # Keyword matching bonus based ONLY on substantive words
+        chunk_words = set(re.findall(r'\b[a-zA-Z]{3,}\b', chunk.content.lower()))
+        common_words = substantive_query_words.intersection(chunk_words)
+        
+        # Only reward if actual substantive query words appear in chunk!
+        if common_words:
+            keyword_ratio = len(common_words) / len(substantive_query_words)
+            score += keyword_ratio * 0.6
+        else:
+            # If NONE of the substantive query keywords exist in the chunk, penalize score
+            score *= 0.1
             
-        scored_chunks.append({
-            "score": round(score, 4),
-            "filename": doc.filename,
-            "document_id": doc.id,
-            "chunk_index": chunk.chunk_index,
-            "content": chunk.content
-        })
+        # Strict relevance threshold: ignore unrelated chunks
+        if score >= 0.35:
+            scored_chunks.append({
+                "score": round(score, 4),
+                "filename": doc.filename,
+                "document_id": doc.id,
+                "chunk_index": chunk.chunk_index,
+                "content": chunk.content
+            })
         
     # Sort descending by score
     scored_chunks.sort(key=lambda x: x["score"], reverse=True)
