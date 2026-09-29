@@ -20,6 +20,28 @@ def run_app():
     print(" [OK] SQLite Database Initialized.")
     
     import uvicorn
+    import atexit
+    
+    print(" [INIT] Starting Ollama server...")
+    try:
+        ollama_process = subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print(" [OK] Ollama server started in background.")
+        
+        def kill_ollama():
+            print("\n [SHUTDOWN] Stopping Ollama server...")
+            ollama_process.terminate()
+            try:
+                ollama_process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                ollama_process.kill()
+            print(" [OK] Ollama server stopped.")
+            
+        atexit.register(kill_ollama)
+    except FileNotFoundError:
+        print(" [WARN] 'ollama' command not found. Ensure Ollama is installed and in PATH.")
+    except Exception as e:
+        print(f" [WARN] Failed to start Ollama: {e}")
+
     print(" [OK] Launching Web UI & FastAPI Server on http://127.0.0.1:8000")
     print("======================================================================")
     

@@ -16,6 +16,22 @@ class User(Base):
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
     documents = relationship("DocumentModel", back_populates="user", cascade="all, delete-orphan")
     usage_logs = relationship("PromptUsageLog", back_populates="user", cascade="all, delete-orphan")
+    profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    designation = Column(String(100), nullable=True)
+    department = Column(String(150), nullable=True)
+    work_experience_years = Column(Float, nullable=True)
+    educational_qualification = Column(String(255), nullable=True)
+    current_skills = Column(Text, nullable=True) # Stored as JSON string
+    completed_trainings = Column(Text, nullable=True) # Stored as JSON string
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="profile")
 
 class UserSession(Base):
     __tablename__ = "user_sessions"

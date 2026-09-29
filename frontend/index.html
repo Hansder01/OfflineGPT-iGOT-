@@ -15,6 +15,9 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/css/style.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="dark-mode">
 
@@ -43,6 +46,12 @@
                 </button>
                 <button class="nav-tab" data-tab="rag-tab" id="tab-rag-btn">
                     <i class="fa-solid fa-book-bookmark"></i> <span data-i18n="rag_tab">Educational KB</span>
+                </button>
+                <button class="nav-tab" data-tab="profile-tab" id="tab-profile-btn">
+                    <i class="fa-solid fa-user-tie"></i> <span>Skill Profile</span>
+                </button>
+                <button class="nav-tab" data-tab="analytics-tab" id="tab-analytics-btn">
+                    <i class="fa-solid fa-chart-line"></i> <span>Analytics</span>
                 </button>
                 <button class="nav-tab" data-tab="ratelimit-tab" id="tab-ratelimit-btn">
                     <i class="fa-solid fa-shield-halved"></i> <span data-i18n="security_tab">Rate Limits</span>
@@ -251,11 +260,12 @@
                                         <th>Size</th>
                                         <th>Chunks</th>
                                         <th>Status</th>
+                                        <th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="docs-table-body">
                                     <tr>
-                                        <td colspan="6" class="text-center">Loading server-side educational documents...</td>
+                                        <td colspan="7" class="text-center">Loading server-side educational documents...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -392,6 +402,100 @@ GROQ_API_KEY=gsk_...</code></pre>
                 </div>
             </section>
 
+            <!-- 6. SKILL PROFILE TAB -->
+            <section id="profile-tab" class="tab-panel">
+                <div class="profile-layout" style="display: grid; grid-template-columns: 1fr; gap: 1.5rem; max-width: 800px; margin: 0 auto; padding: 1rem;">
+                    <div class="glass-card">
+                        <h3 class="panel-title"><i class="fa-solid fa-address-card"></i> Official Competency Profile</h3>
+                        <p class="panel-desc">Update your profile to receive personalized learning recommendations and skill gap analysis.</p>
+                        
+                        <form id="profile-form" style="margin-top: 1.5rem;">
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-primary);">Designation</label>
+                                <input type="text" id="prof-designation" class="text-input" placeholder="e.g. Statistical Officer">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-primary);">Department</label>
+                                <input type="text" id="prof-department" class="text-input" placeholder="e.g. Ministry of Statistics">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-primary);">Work Experience (Years)</label>
+                                <input type="number" step="0.5" id="prof-experience" class="text-input" placeholder="e.g. 5">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-primary);">Educational Qualification</label>
+                                <input type="text" id="prof-education" class="text-input" placeholder="e.g. M.Sc. Statistics">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-primary);">Current Skills (comma separated)</label>
+                                <input type="text" id="prof-skills" class="text-input" placeholder="e.g. Python, SQL, Survey Design">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-primary);">Completed Trainings (comma separated)</label>
+                                <input type="text" id="prof-trainings" class="text-input" placeholder="e.g. Data Analytics 101, Advanced R">
+                            </div>
+                            <button type="submit" class="btn btn-emerald btn-block" style="margin-top: 1rem;"><i class="fa-solid fa-floppy-disk"></i> Save Profile</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 7. ANALYTICS TAB -->
+            <section id="analytics-tab" class="tab-panel">
+                <div class="analytics-layout" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; padding: 1rem; max-width: 1200px; margin: 0 auto;">
+                    
+                    <!-- Overview Card -->
+                    <div class="glass-card" style="grid-column: span 2;">
+                        <h3 class="panel-title"><i class="fa-solid fa-chart-pie"></i> Learning & Competency Analytics</h3>
+                        <p class="panel-desc">Visualizing your skill progress and learning engagement across the platform.</p>
+                        
+                        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                            <div style="flex: 1; padding: 1.5rem; background: rgba(168,85,247,0.1); border-radius: 8px; text-align: center; border: 1px solid rgba(168,85,247,0.2);">
+                                <h4 style="color: var(--accent-pink); font-size: 2.5rem; margin-bottom: 0.5rem; font-family: var(--font-code);" id="stat-skills">0</h4>
+                                <span style="color: var(--text-muted); font-size: 0.95rem; font-weight: 500; text-transform: uppercase; letter-spacing: 1px;">Registered Skills</span>
+                            </div>
+                            <div style="flex: 1; padding: 1.5rem; background: rgba(56,189,248,0.1); border-radius: 8px; text-align: center; border: 1px solid rgba(56,189,248,0.2);">
+                                <h4 style="color: var(--accent-cyan); font-size: 2.5rem; margin-bottom: 0.5rem; font-family: var(--font-code);" id="stat-trainings">0</h4>
+                                <span style="color: var(--text-muted); font-size: 0.95rem; font-weight: 500; text-transform: uppercase; letter-spacing: 1px;">Completed Trainings</span>
+                            </div>
+                            <div style="flex: 1; padding: 1.5rem; background: rgba(16,185,129,0.1); border-radius: 8px; text-align: center; border: 1px solid rgba(16,185,129,0.2);">
+                                <h4 style="color: var(--accent-emerald); font-size: 2.5rem; margin-bottom: 0.5rem; font-family: var(--font-code);" id="stat-docs">0</h4>
+                                <span style="color: var(--text-muted); font-size: 0.95rem; font-weight: 500; text-transform: uppercase; letter-spacing: 1px;">Knowledge Base Docs</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Radar Chart (Skill Mapping) -->
+                    <div class="glass-card" style="display: flex; flex-direction: column; align-items: center;">
+                        <h4 style="color: var(--text-primary); margin-bottom: 1rem; width: 100%; text-align: left;"><i class="fa-solid fa-spider"></i> Skill Competency Map</h4>
+                        <div style="position: relative; height: 350px; width: 100%; display: flex; justify-content: center;">
+                            <canvas id="skillsRadarChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Bar Chart (Engagement) -->
+                    <div class="glass-card" style="display: flex; flex-direction: column; align-items: center;">
+                        <h4 style="color: var(--text-primary); margin-bottom: 1rem; width: 100%; text-align: left;"><i class="fa-solid fa-chart-column"></i> Platform Engagement</h4>
+                        <div style="position: relative; height: 350px; width: 100%;">
+                            <canvas id="engagementBarChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- iGOT Recommendations -->
+                    <div class="glass-card" style="grid-column: span 2;">
+                        <h4 style="color: var(--text-primary); margin-bottom: 1rem;"><i class="fa-solid fa-graduation-cap"></i> iGOT Karmayogi Recommended Modules</h4>
+                        <p class="panel-desc">Based on your recent RAG interactions and quizzes, here are tailored official training modules.</p>
+                        
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem;" id="igot-courses-container">
+                            <div style="width: 100%; text-align: center; color: var(--text-muted); padding: 2rem;">
+                                <i class="fa-solid fa-spinner fa-spin"></i> Analyzing skill profile to fetch iGOT modules...
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
         </main>
     </div>
 
@@ -436,6 +540,19 @@ GROQ_API_KEY=gsk_...</code></pre>
                 <div id="register-error" class="form-error hidden"></div>
                 <button type="submit" class="btn btn-emerald btn-block">Create Account</button>
             </form>
+        </div>
+    </div>
+
+    <!-- QUIZ MODAL -->
+    <div id="quiz-modal" class="modal-overlay hidden">
+        <div class="modal-card glass-card" style="max-width: 600px; width: 90%; max-height: 80vh; display: flex; flex-direction: column;">
+            <button id="close-quiz-modal" class="modal-close-btn">&times;</button>
+            <h3 class="panel-title" style="margin-bottom: 1rem;"><i class="fa-solid fa-list-check"></i> AI Generated Quiz</h3>
+            <div id="quiz-content" style="flex: 1; overflow-y: auto; padding-right: 10px;">
+                <p>Loading quiz...</p>
+            </div>
+            <button id="submit-quiz-btn" class="btn btn-primary btn-block" style="margin-top: 1rem;">Submit & Evaluate</button>
+            <div id="quiz-evaluation" class="hidden" style="margin-top: 1rem; padding: 1rem; background: rgba(168,85,247,0.1); border-radius: 8px;"></div>
         </div>
     </div>
 

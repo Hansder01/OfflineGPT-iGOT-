@@ -81,6 +81,21 @@ class ApiClient {
         return this.request('/auth/me', { method: 'GET' });
     }
 
+    static async getProfileData() {
+        return this.request('/auth/profile', { method: 'GET' });
+    }
+
+    static async updateProfileData(profileData) {
+        return this.request('/auth/profile', {
+            method: 'POST',
+            body: JSON.stringify(profileData)
+        });
+    }
+
+    static async getAnalyticsDashboard() {
+        return this.request('/analytics/dashboard', { method: 'GET' });
+    }
+
     static async logout() {
         return this.request('/auth/logout', { method: 'POST' });
     }
@@ -119,6 +134,20 @@ class ApiClient {
         return this.request('/documents/search', {
             method: 'POST',
             body: JSON.stringify({ query })
+        });
+    }
+
+    static async generateQuiz(docId, mode = 'auto') {
+        return this.request(`/documents/${docId}/generate_quiz`, {
+            method: 'POST',
+            body: JSON.stringify({ mode })
+        });
+    }
+
+    static async getIgotRecommendations(skillGap) {
+        return this.request('/igot/recommendations', {
+            method: 'POST',
+            body: JSON.stringify({ skill_gap: skillGap })
         });
     }
 

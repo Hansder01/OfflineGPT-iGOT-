@@ -97,7 +97,7 @@ def execute_agent_tool(tool_name: str, args: Dict[str, Any], db: Optional[Sessio
     else:
         return {"error": f"Unknown tool: {tool_name}"}
 
-def call_gemini_api(prompt: str, system_context: str = "") -> Optional[str]:
+def call_gemini_api(prompt: str, system_context: str = "", include_guardrail: bool = True) -> Optional[str]:
     """Calls Free Google Gemini REST API."""
     if not settings.GEMINI_API_KEY:
         return None
@@ -105,7 +105,9 @@ def call_gemini_api(prompt: str, system_context: str = "") -> Optional[str]:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     
-    full_text = f"{LOCKED_EDUCATIONAL_SYSTEM_PROMPT}\n\n{system_context}\n\nUser Question:\n{prompt}"
+    base_sys = LOCKED_EDUCATIONAL_SYSTEM_PROMPT if include_guardrail else ""
+    full_text = f"{base_sys}\n\n{system_context}\n\nUser Question:\n{prompt}".strip()
+    
     payload = {
         "contents": [
             {
@@ -124,7 +126,7 @@ def call_gemini_api(prompt: str, system_context: str = "") -> Optional[str]:
         pass
     return None
 
-def call_groq_api(prompt: str, system_context: str = "") -> Optional[str]:
+def call_groq_api(prompt: str, system_context: str = "", include_guardrail: bool = True) -> Optional[str]:
     """Calls Free Groq API (Llama-3.1)."""
     if not settings.GROQ_API_KEY:
         return None
@@ -135,8 +137,9 @@ def call_groq_api(prompt: str, system_context: str = "") -> Optional[str]:
         "Content-Type": "application/json"
     }
     
+    base_sys = LOCKED_EDUCATIONAL_SYSTEM_PROMPT if include_guardrail else ""
     messages = [
-        {"role": "system", "content": f"{LOCKED_EDUCATIONAL_SYSTEM_PROMPT}\n{system_context}"},
+        {"role": "system", "content": f"{base_sys}\n{system_context}".strip()},
         {"role": "user", "content": prompt}
     ]
     
@@ -156,11 +159,12 @@ def call_groq_api(prompt: str, system_context: str = "") -> Optional[str]:
         pass
     return None
 
-def call_ollama_local(prompt: str, system_context: str = "") -> Optional[str]:
+def call_ollama_local(prompt: str, system_context: str = "", include_guardrail: bool = True) -> Optional[str]:
     """
-    Calls local Ollama instance running Llama 3.2 with strict educational safety lock.
+    Calls local Ollama instance running Llama 3.2 with strict educational safety lock (optional).
     """
-    combined_system = f"{LOCKED_EDUCATIONAL_SYSTEM_PROMPT}\n\n{system_context}".strip()
+    base_sys = LOCKED_EDUCATIONAL_SYSTEM_PROMPT if include_guardrail else ""
+    combined_system = f"{base_sys}\n\n{system_context}".strip()
     
     chat_url = f"{settings.OLLAMA_BASE_URL}/api/chat"
     chat_payload = {
@@ -177,12 +181,15 @@ def call_ollama_local(prompt: str, system_context: str = "") -> Optional[str]:
     }
     
     try:
-        response = requests.post(chat_url, json=chat_payload, timeout=8)
+        response = requests.post(chat_url, json=chat_payload, timeout=300)
         if response.status_code == 200:
             res_json = response.json()
             raw_text = res_json.get("message", {}).get("content", "")
             if raw_text:
                 return sanitize_output(raw_text)
+    except requests.exceptions.Timeout:
+        print("Ollama chat endpoint timed out. Skipping fallback.")
+        return None
     except Exception:
         pass
 
@@ -193,7 +200,7 @@ def call_ollama_local(prompt: str, system_context: str = "") -> Optional[str]:
         "stream": False
     }
     try:
-        response = requests.post(gen_url, json=gen_payload, timeout=8)
+        response = requests.post(gen_url, json=gen_payload, timeout=300)
         if response.status_code == 200:
             raw_text = response.json().get("response", "")
             if raw_text:
@@ -350,3 +357,55 @@ def generate_agent_response(prompt: str, db: Session, user_id: Optional[int] = N
         "tools_executed": [t.get("tool") for t in tool_outputs if "tool" in t],
         "rag_sources": valid_rag_chunks
     }
+
+def generate_quiz_from_text(text: str, mode: str = "auto") -> Optional[Dict[str, Any]]:
+    """Generates an MCQ quiz in JSON format from the given text."""
+    system_context = """
+You are an AI Assessment Engine for the Skill Intelligence Platform.
+Generate a Multiple Choice Question (MCQ) quiz with exactly 10 questions based on the provided text.
+You MUST return ONLY a valid JSON object in the following format. Do not include markdown formatting or backticks around the JSON.
+{
+  "quiz": [
+    {
+      "question": "Question text",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct_answer_index": 0,
+      "explanation": "Explanation for the correct answer"
+    }
+  ]
+}
+"""
+    prompt = f"Generate a quiz based on this text:\n\n{text}"
+    answer = None
+
+    if mode == "gemini" or (mode == "auto" and settings.GEMINI_API_KEY):
+        answer = call_gemini_api(prompt, system_context, include_guardrail=False)
+    if not answer and (mode == "groq" or (mode == "auto" and settings.GROQ_API_KEY)):
+        answer = call_groq_api(prompt, system_context, include_guardrail=False)
+    if not answer and (mode == "offline" or mode == "auto"):
+        answer = call_ollama_local(prompt, system_context, include_guardrail=False)
+        
+    if answer:
+        try:
+            # Clean up markdown formatting if the LLM wrapped it in ```json ... ```
+            cleaned = answer.strip()
+            if cleaned.startswith("```json"):
+                cleaned = cleaned[7:]
+            if cleaned.startswith("```"):
+                cleaned = cleaned[3:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            
+            return json.loads(cleaned.strip())
+        except Exception as e:
+            print(f"Failed to parse quiz JSON: {e}")
+            import re
+            try:
+                match = re.search(r'(\{[\s\S]*\})', answer)
+                if match:
+                    return json.loads(match.group(1))
+            except Exception as inner_e:
+                print(f"Regex extraction also failed: {inner_e}")
+            return None
+    return None
+

@@ -20,6 +20,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (target === 'about-tab') {
                 loadSystemTelemetry();
+            } else if (target === 'profile-tab') {
+                loadUserProfile();
+            } else if (target === 'analytics-tab') {
+                loadAnalytics();
             }
         });
     });
@@ -156,6 +160,162 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('tele-ram').innerText = `${tele.memory_used_gb || 0} GB / ${tele.memory_total_gb || 0} GB (${tele.memory_percent || 0}%)`;
         } catch (e) {
             console.error("Error loading telemetry:", e);
+        }
+    }
+
+    // Profile Logic
+    const profileForm = document.getElementById('profile-form');
+    if (profileForm) {
+        profileForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const profData = {
+                designation: document.getElementById('prof-designation').value,
+                department: document.getElementById('prof-department').value,
+                work_experience_years: parseFloat(document.getElementById('prof-experience').value) || 0,
+                educational_qualification: document.getElementById('prof-education').value,
+                current_skills: document.getElementById('prof-skills').value.split(',').map(s => s.trim()).filter(s => s),
+                completed_trainings: document.getElementById('prof-trainings').value.split(',').map(s => s.trim()).filter(s => s)
+            };
+            
+            try {
+                await ApiClient.updateProfileData(profData);
+                showToast("Profile saved successfully!", "success");
+            } catch (err) {
+                showToast(`Failed to save profile: ${err.message}`, "error");
+            }
+        });
+    }
+
+    async function loadUserProfile() {
+        try {
+            const data = await ApiClient.getProfileData();
+            if (data && Object.keys(data).length > 0) {
+                document.getElementById('prof-designation').value = data.designation || '';
+                document.getElementById('prof-department').value = data.department || '';
+                document.getElementById('prof-experience').value = data.work_experience_years || '';
+                document.getElementById('prof-education').value = data.educational_qualification || '';
+                document.getElementById('prof-skills').value = (data.current_skills || []).join(', ');
+                document.getElementById('prof-trainings').value = (data.completed_trainings || []).join(', ');
+            }
+        } catch (err) {
+            console.error("Error loading profile data:", err);
+        }
+    }
+
+    let radarChartInstance = null;
+    let barChartInstance = null;
+
+    async function loadAnalytics() {
+        try {
+            const res = await ApiClient.getAnalyticsDashboard();
+            
+            // Update Stat numbers
+            document.getElementById('stat-skills').innerText = res.stats.skills || 0;
+            document.getElementById('stat-trainings').innerText = res.stats.trainings || 0;
+            document.getElementById('stat-docs').innerText = res.stats.documents || 0;
+
+            // Render Radar Chart
+            const skillsLabels = res.skills_data.length > 0 ? res.skills_data : ['No Skills Logged'];
+            const skillsValues = res.skills_data.length > 0 ? res.skills_data.map(() => 100) : [0]; // default visual max
+            
+            const radarCtx = document.getElementById('skillsRadarChart').getContext('2d');
+            if (radarChartInstance) radarChartInstance.destroy();
+            radarChartInstance = new Chart(radarCtx, {
+                type: 'radar',
+                data: {
+                    labels: skillsLabels,
+                    datasets: [{
+                        label: 'Competency Alignment (%)',
+                        data: skillsValues,
+                        backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                        borderColor: 'rgba(168, 85, 247, 1)',
+                        pointBackgroundColor: 'rgba(168, 85, 247, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(168, 85, 247, 1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            pointLabels: { color: 'rgba(255, 255, 255, 0.7)', font: { size: 12 } },
+                            ticks: { display: false }
+                        }
+                    },
+                    plugins: { legend: { labels: { color: 'rgba(255, 255, 255, 0.8)' } } }
+                }
+            });
+
+            // Render Bar Chart
+            const barCtx = document.getElementById('engagementBarChart').getContext('2d');
+            if (barChartInstance) barChartInstance.destroy();
+            barChartInstance = new Chart(barCtx, {
+                type: 'bar',
+                data: {
+                    labels: res.engagement_data.labels,
+                    datasets: [{
+                        label: 'Interactions',
+                        data: res.engagement_data.data,
+                        backgroundColor: ['rgba(56, 189, 248, 0.7)', 'rgba(16, 185, 129, 0.7)', 'rgba(244, 63, 94, 0.7)'],
+                        borderColor: ['rgba(56, 189, 248, 1)', 'rgba(16, 185, 129, 1)', 'rgba(244, 63, 94, 1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: 'rgba(255, 255, 255, 0.7)' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: 'rgba(255, 255, 255, 0.7)' }
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            // Fetch iGOT Recommendations
+            try {
+                // Pick a skill gap to query (default to 'data' if none)
+                const skillGapQuery = (res.skills_data.length > 0) ? res.skills_data[0] : "data";
+                const igotRes = await ApiClient.getIgotRecommendations(skillGapQuery);
+                const container = document.getElementById('igot-courses-container');
+                container.innerHTML = '';
+                
+                if (igotRes.recommended_courses && igotRes.recommended_courses.length > 0) {
+                    igotRes.recommended_courses.forEach(course => {
+                        container.innerHTML += `
+                            <div style="flex: 1; min-width: 250px; background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 8px; border-left: 4px solid var(--accent-emerald);">
+                                <h5 style="color: var(--accent-cyan); font-size: 1.1rem; margin-bottom: 0.5rem;">${course.title}</h5>
+                                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;"><i class="fa-solid fa-building-columns"></i> ${course.provider}</p>
+                                <p style="color: var(--text-muted); font-size: 0.9rem;"><i class="fa-regular fa-clock"></i> ${course.duration}</p>
+                                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                                    ${course.tags.map(t => `<span style="background: rgba(168,85,247,0.2); padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; color: var(--accent-pink);">${t}</span>`).join('')}
+                                </div>
+                                <button class="btn btn-outline" style="margin-top: 1rem; width: 100%; border-color: var(--accent-emerald); color: var(--accent-emerald);" onclick="window.open('https://igot.karmayogi.gov.in', '_blank')">View on iGOT</button>
+                            </div>
+                        `;
+                    });
+                } else {
+                    container.innerHTML = '<p style="color: var(--text-muted);">No recommendations at this time.</p>';
+                }
+            } catch (e) {
+                console.error("iGOT Fetch Error:", e);
+                document.getElementById('igot-courses-container').innerHTML = '<p style="color: var(--accent-pink);">Failed to connect to iGOT Karmayogi Mock API.</p>';
+            }
+
+        } catch (err) {
+            console.error("Error loading analytics:", err);
+            showToast("Failed to load Analytics dashboard", "error");
         }
     }
 

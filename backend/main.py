@@ -10,14 +10,14 @@ from sqlalchemy.orm import Session
 
 from backend.config import settings
 from backend.db import get_db, init_db
-from backend.models import User, DocumentModel, DocumentChunk, PromptUsageLog
+from backend.models import User, DocumentModel, DocumentChunk, PromptUsageLog, UserProfile
 from backend.auth import (
     hash_password, verify_password, create_access_token,
     create_db_session, get_current_user_from_token, deactivate_session
 )
 from backend.rate_limiter import check_rate_limit, get_rate_limit_info
 from backend.rag_engine import index_document_content, search_documents
-from backend.agentic_llm import generate_agent_response
+from backend.agentic_llm import generate_agent_response, generate_quiz_from_text
 from backend.cli_parser import parse_and_execute_cli
 from backend.utils import extract_text_from_file, get_system_telemetry
 from backend.content_safety import evaluate_content_safety
@@ -55,10 +55,21 @@ def get_user_optional(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ) -> Optional[User]:
-    if not authorization:
-        return None
-    token = authorization.replace("Bearer ", "").strip()
-    return get_current_user_from_token(db, token)
+    if authorization:
+        token = authorization.replace("Bearer ", "").strip()
+        user = get_current_user_from_token(db, token)
+        if user:
+            return user
+            
+    # Fallback: Auto-login for local offline single-user mode
+    local_user = db.query(User).filter(User.username == "local_admin").first()
+    if not local_user:
+        from backend.auth import hash_password
+        local_user = User(username="local_admin", email="admin@offline.local", hashed_password=hash_password("admin"))
+        db.add(local_user)
+        db.commit()
+        db.refresh(local_user)
+    return local_user
 
 # Rate Limiter dependency helper
 def enforce_rate_limit(request: Request, db: Session, user: Optional[User]):
@@ -125,6 +136,107 @@ def logout(authorization: Optional[str] = Header(None), db: Session = Depends(ge
         token = authorization.replace("Bearer ", "").strip()
         deactivate_session(db, token)
     return {"message": "Logged out successfully"}
+
+@app.get("/api/auth/profile")
+def get_user_profile_data(db: Session = Depends(get_db), user: Optional[User] = Depends(get_user_optional)):
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+    if not profile:
+        return {}
+    import json
+    return {
+        "designation": profile.designation,
+        "department": profile.department,
+        "work_experience_years": profile.work_experience_years,
+        "educational_qualification": profile.educational_qualification,
+        "current_skills": json.loads(profile.current_skills) if profile.current_skills else [],
+        "completed_trainings": json.loads(profile.completed_trainings) if profile.completed_trainings else []
+    }
+
+@app.post("/api/auth/profile")
+def update_user_profile_data(payload: dict, db: Session = Depends(get_db), user: Optional[User] = Depends(get_user_optional)):
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+        
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+    if not profile:
+        profile = UserProfile(user_id=user.id)
+        db.add(profile)
+        
+    import json
+    if "designation" in payload:
+        profile.designation = payload["designation"]
+    if "department" in payload:
+        profile.department = payload["department"]
+    if "work_experience_years" in payload:
+        try:
+            profile.work_experience_years = float(payload["work_experience_years"])
+        except:
+            pass
+    if "educational_qualification" in payload:
+        profile.educational_qualification = payload["educational_qualification"]
+    if "current_skills" in payload:
+        profile.current_skills = json.dumps(payload["current_skills"])
+    if "completed_trainings" in payload:
+        profile.completed_trainings = json.dumps(payload["completed_trainings"])
+        
+    db.commit()
+    return {"message": "Profile updated successfully"}
+
+@app.get("/api/analytics/dashboard")
+def get_analytics_dashboard(db: Session = Depends(get_db), user: Optional[User] = Depends(get_user_optional)):
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    import json
+    
+    # Get Profile Stats
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+    skills_count = 0
+    trainings_count = 0
+    skills_list = []
+    
+    if profile:
+        skills_list = json.loads(profile.current_skills) if profile.current_skills else []
+        skills_count = len(skills_list)
+        trainings_list = json.loads(profile.completed_trainings) if profile.completed_trainings else []
+        trainings_count = len(trainings_list)
+        
+    # Get Document Stats
+    docs_count = db.query(DocumentModel).count()
+    
+    # Get Chat/Prompt Stats
+    if user.username == "local_admin":
+        prompt_count = db.query(PromptUsageLog).count()
+    else:
+        prompt_count = db.query(PromptUsageLog).filter(PromptUsageLog.user_id == user.id).count()
+    
+    return {
+        "stats": {
+            "skills": skills_count,
+            "trainings": trainings_count,
+            "documents": docs_count,
+            "prompts": prompt_count
+        },
+        "skills_data": skills_list,
+        "engagement_data": {
+            "labels": ["Prompts Sent", "KB Documents", "Trainings Completed"],
+            "data": [prompt_count, docs_count, trainings_count]
+        }
+    }
+
+# --- iGOT INTEGRATION ENDPOINTS ---
+from backend.igot_client import search_igot_courses
+
+@app.post("/api/igot/recommendations")
+def get_igot_recommendations(payload: dict, db: Session = Depends(get_db), user: Optional[User] = Depends(get_user_optional)):
+    skill_gap = payload.get("skill_gap", "")
+    if not skill_gap:
+        raise HTTPException(status_code=400, detail="skill_gap is required")
+        
+    courses = search_igot_courses(skill_gap)
+    return {"skill_gap": skill_gap, "recommended_courses": courses}
 
 # --- SECURITY & RATE LIMIT ENDPOINTS ---
 
@@ -319,6 +431,31 @@ def search_knowledge_base(payload: dict, db: Session = Depends(get_db), user: Op
         return {"results": []}
     results = search_documents(db, query, top_k=settings.MAX_SEARCH_RESULTS, user_id=user.id if user else None)
     return {"query": query, "results": results}
+
+@app.post("/api/documents/{doc_id}/generate_quiz")
+def generate_document_quiz(doc_id: int, payload: dict, db: Session = Depends(get_db), user: Optional[User] = Depends(get_user_optional)):
+    doc = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found.")
+        
+    chunks = db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).order_by(DocumentChunk.chunk_index).all()
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Document has no text content for quiz generation.")
+        
+    # Limit to 10 chunks to ensure enough context for 10 questions while balancing CPU usage
+    combined_text = "\n\n".join([c.content for c in chunks[:10]])
+    
+    # Enforce Ollama only for quiz generation
+    mode = "offline"
+    quiz_data = generate_quiz_from_text(combined_text, mode=mode)
+    
+    if not quiz_data:
+        raise HTTPException(
+            status_code=503, 
+            detail="AI Quiz Generation failed. Ensure Ollama is running locally."
+        )
+        
+    return {"document_id": doc_id, "filename": doc.filename, "quiz": quiz_data.get("quiz", [])}
 
 # --- SYSTEM TELEMETRY ENDPOINT ---
 
